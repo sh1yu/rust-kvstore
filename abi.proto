@@ -3,7 +3,7 @@ syntax = "proto3";
 package abi;
 
 message Request {
-  oneof message {
+  oneof command {
     RequestGet get = 1;
     RequestPut put = 2;
   }
@@ -12,7 +12,7 @@ message Request {
 message Response {
   uint32 code = 1;
   string key = 2;
-  string value = 3;
+  bytes value = 3;
 }
 
 message RequestGet {
