@@ -1,12 +1,12 @@
 use anyhow::Result;
 use dashmap::DashMap;
 use futures::{SinkExt, StreamExt};
+use rust_kvstore::noise_codec::{NoiseCodec, NOISE_PARAMS};
 use rust_kvstore::pb::request::Command;
 use rust_kvstore::pb::{Request, RequestGet, RequestPut, Response};
 use std::convert::TryInto;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tokio_util::codec::LengthDelimitedCodec;
 use tracing::info;
 
 #[derive(Debug)]
@@ -45,9 +45,21 @@ async fn main() -> Result<()> {
         let shared = state.clone();
 
         tokio::spawn(async move {
-            let mut stream = LengthDelimitedCodec::builder()
-                .length_field_length(2)
-                .new_framed(stream);
+            let mut stream = NoiseCodec::builder(NOISE_PARAMS, false).new_framed(stream)?;
+
+            // <- e
+            let data = stream.next().await.unwrap()?;
+            info!("<- e");
+
+            // -> e, ee, s, es
+            stream.send(data.freeze()).await?;
+            info!("-> e, ee, s, es");
+
+            //<- s, se
+            let _data = stream.next().await.unwrap()?;
+            info!("<- s, se");
+
+            stream.codec_mut().into_transport_mode()?;
 
             while let Some(Ok(buf)) = stream.next().await {
                 let msg: Request = buf.try_into()?;

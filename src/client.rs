@@ -1,8 +1,12 @@
 use anyhow::Result;
+use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
-use rust_kvstore::pb::{Request, Response};
+use rust_kvstore::{
+    noise_codec::{NoiseCodec, NOISE_PARAMS},
+    pb::{Request, Response},
+};
 use tokio::net::TcpStream;
-use tokio_util::codec::LengthDelimitedCodec;
+use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -12,9 +16,21 @@ async fn main() -> Result<()> {
 
     let addr = "localhost:8888";
     let stream = TcpStream::connect(addr).await?;
-    let mut stream = LengthDelimitedCodec::builder()
-        .length_field_length(2)
-        .new_framed(stream);
+    let mut stream = NoiseCodec::builder(NOISE_PARAMS, true).new_framed(stream)?;
+
+    // -> e
+    stream.send(Bytes::from_static(&[])).await?;
+    info!("-> e");
+
+    // <- e, ee, s, es
+    let data = stream.next().await.unwrap()?;
+    info!("<- e, ee, s, es");
+
+    // -> s, se
+    stream.send(data.freeze()).await?;
+    info!("-> s, se");
+
+    stream.codec_mut().into_transport_mode()?;
 
     let msg = Request::new_put("hello", b"world");
     stream.send(msg.into()).await?;
